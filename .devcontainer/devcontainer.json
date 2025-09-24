@@ -1,0 +1,4 @@
+{
+  "image": "ghcr.io/devcontainers-extra/features/zig:1",
+  "features": {}
+}
