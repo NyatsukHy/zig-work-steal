@@ -42,22 +42,22 @@ const LocalLinkedQueue = struct {
 
             if (tail) |t| {
                 // Try to link the new item after the current tail
-                if (t.next.compareExchange(null, item, .acquire, .relaxed)) |_| {
-                    // Successfully linked, now update tail
+                if (t.next.cmpxchgStrong(null, item, .acquire, .relaxed)) |old| {
+                    // cmpxchgStrong failed, retry
+                    continue;
+                } else {
+                    // cmpxchgStrong succeeded, now update tail
                     self.tail.store(item, .release);
                     break;
-                } else {
-                    // Another thread interfered, retry
-                    continue;
                 }
             } else {
                 // Queue is empty, try to set head and tail
-                if (self.head.compareExchange(null, item, .acquire, .relaxed)) |_| {
+                if (self.head.cmpxchgStrong(null, item, .acquire, .relaxed)) |old| {
+                    // cmpxchgStrong failed, retry
+                    continue;
+                } else {
                     self.tail.store(item, .release);
                     break;
-                } else {
-                    // Another thread interfered, retry
-                    continue;
                 }
             }
         }
@@ -71,7 +71,10 @@ const LocalLinkedQueue = struct {
             if (head == null) return null;
 
             const next = head.?.next.load(.acquire);
-            if (self.head.compareExchange(head, next, .acquire, .relaxed)) |_| {
+            if (self.head.cmpxchgStrong(head, next, .acquire, .relaxed)) |old| {
+                // cmpxchgStrong failed, retry
+                continue;
+            } else {
                 if (next == null) {
                     // Queue is now empty, update tail
                     self.tail.store(null, .release);
@@ -82,14 +85,14 @@ const LocalLinkedQueue = struct {
                 self.pool.destroy(head.?);
                 return work;
             }
-            // Another thread interfered, retry
         }
     }
-}
+};
 
 pub const WorkQueue = struct {
     arena: std.ArrayList(Work),
-    working: std.
+    working: LocalLinkedQueue,
+    
 }
 
 pub fn bufferedPrint() !void {
